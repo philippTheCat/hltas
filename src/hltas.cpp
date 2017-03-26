@@ -9,7 +9,7 @@
 #include <string>
 #include <sstream>
 #include <utility>
-#include <boost/algorithm/string/trim.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/tokenizer.hpp>
@@ -34,7 +34,13 @@ namespace HLTAS
 		"Lgagst requires either Autojump or Ducktap.",
 		"Lgagst min speed is required.",
 		"You cannot specify the Autojump or Ducktap times if you have Lgagst enabled.",
-		"RNG seed is required."
+		"RNG seed is required.",
+		"Invalid strafing algorithm (only \"yaw\" and \"vectorial\" allowed).",
+		"Missing algorithm parameter (\"yaw\" or \"vectorial\").",
+		"Missing constraints.",
+		"Constraints should start with +- (e.g. +-0.5).",
+		"Missing from and to yaw parameters.",
+		"Missing \"to\"."
 	};
 
 	const std::string& GetErrorMessage(ErrorDescription error)
@@ -250,6 +256,30 @@ namespace HLTAS
 		ResetNonSharedRNGSeed = value;
 	}
 
+	StrafingAlgorithm Frame::GetAlgorithm() const
+	{
+		assert(StrafingAlgorithmPresent);
+		return Algorithm;
+	}
+
+	void Frame::SetAlgorithm(StrafingAlgorithm value)
+	{
+		StrafingAlgorithmPresent = true;
+		Algorithm = value;
+	}
+
+	AlgorithmParameters Frame::GetAlgorithmParameters() const
+	{
+		assert(AlgorithmParametersPresent);
+		return Parameters;
+	}
+
+	void Frame::SetAlgorithmParameters(AlgorithmParameters value)
+	{
+		AlgorithmParametersPresent = true;
+		Parameters = value;
+	}
+
 	static std::pair<std::string, std::string> SplitProperty(const std::string& line)
 	{
 		auto commentPos = line.find("//");
@@ -444,6 +474,75 @@ namespace HLTAS
 				f.ResetFrame = true;
 				auto s = line.c_str() + 6;
 				f.ResetNonSharedRNGSeed = boost::lexical_cast<int64_t>(s);
+				Frames.push_back(f);
+				commentString.clear();
+				continue;
+			}
+			if (!line.compare(0, 9, "strafing ")) {
+				Frame f;
+				f.Comments = commentString;
+				f.StrafingAlgorithmPresent = true;
+
+				auto s = line.c_str() + 9;
+				if (!strcmp(s, "yaw"))
+					f.Algorithm = StrafingAlgorithm::YAW;
+				else if (!strcmp(s, "vectorial"))
+					f.Algorithm = StrafingAlgorithm::VECTORIAL;
+				else
+					throw ErrorCode::INVALID_ALGORITHM;
+
+				Frames.push_back(f);
+				commentString.clear();
+				continue;
+			}
+			if (!line.compare(0, 11, "target_yaw ")) {
+				Frame f;
+				f.Comments = commentString;
+				f.AlgorithmParametersPresent = true;
+
+				std::vector<std::string> parts;
+				boost::split(parts, line, [](char c) { return std::isspace(c); });
+
+				if (parts.size() == 1) {
+					throw ErrorCode::MISSING_ALGORITHM_PARAMETERS;
+				} else {
+					auto type = parts[1];
+					if (type == "velocity") {
+						f.Parameters.Type = ConstraintsType::VELOCITY;
+
+						if (parts.size() < 3)
+							throw ErrorCode::MISSING_CONSTRAINTS;
+
+						if (!boost::starts_with(parts[2], "+-"))
+							throw ErrorCode::NO_PM_IN_CONSTRAINTS;
+
+						f.Parameters.Parameters.Velocity.Constraints = boost::lexical_cast<double>(parts[2].c_str() + 2);
+					} else if (type == "from") {
+						f.Parameters.Type = ConstraintsType::YAW_RANGE;
+
+						if (parts.size() < 5)
+							throw ErrorCode::MISSING_ALGORITHM_FROMTO_PARAMETERS;
+
+						f.Parameters.Parameters.YawRange.LowestYaw = boost::lexical_cast<double>(parts[2]);
+
+						if (parts[3] != "to")
+							throw ErrorCode::NO_TO_IN_FROMTO_ALGORITHM;
+
+						f.Parameters.Parameters.YawRange.HighestYaw = boost::lexical_cast<double>(parts[4]);
+					} else {
+						f.Parameters.Type = ConstraintsType::YAW;
+						f.Parameters.Parameters.Yaw.Yaw = boost::lexical_cast<double>(parts[1]);
+
+						if (parts.size() < 3)
+							throw ErrorCode::MISSING_CONSTRAINTS;
+
+						if (!boost::starts_with(parts[2], "+-"))
+							throw ErrorCode::NO_PM_IN_CONSTRAINTS;
+
+						f.Parameters.Parameters.Yaw.Constraints = boost::lexical_cast<double>(parts[2].c_str() + 2);
+					}
+				}
+
 				Frames.push_back(f);
 				commentString.clear();
 				continue;
@@ -747,6 +846,32 @@ namespace HLTAS
 			}
 			if (frame.ResetFrame) {
 				file << "reset " << frame.ResetNonSharedRNGSeed << '\n';
+				if (file.fail())
+					throw ErrorCode::FAILWRITE;
+				continue;
+			}
+			if (frame.StrafingAlgorithmPresent) {
+				file << "strafing " << (frame.Algorithm == StrafingAlgorithm::YAW ? "yaw" : "vectorial") << '\n';
+				if (file.fail())
+					throw ErrorCode::FAILWRITE;
+				continue;
+			}
+			if (frame.StrafingAlgorithmPresent) {
+				file << "target_yaw ";
+				switch (frame.Parameters.Type) {
+				case ConstraintsType::VELOCITY:
+					file << "velocity +-" << frame.Parameters.Parameters.Velocity.Constraints;
+					break;
+
+				case ConstraintsType::YAW_RANGE:
+					file << "from " << frame.Parameters.Parameters.YawRange.LowestYaw << " to " << frame.Parameters.Parameters.YawRange.HighestYaw;
+					break;
+
+				case ConstraintsType::YAW:
+					file << frame.Parameters.Parameters.Yaw.Yaw << " +-" << frame.Parameters.Parameters.Yaw.Constraints;
+					break;
+				}
+				file << '\n';
 				if (file.fail())
 					throw ErrorCode::FAILWRITE;
 				continue;
