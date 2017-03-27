@@ -95,6 +95,7 @@ namespace HLTAS
 
 	enum class ConstraintsType {
 		VELOCITY = 0,
+		VELOCITY_AVG,
 		YAW,
 		YAW_RANGE
 	};
@@ -108,6 +109,12 @@ namespace HLTAS
 				// In degrees; allowed angles: velocity yaw +- Constraints.
 				double Constraints;
 			} Velocity;
+
+			// Type == VELOCITY_AVG
+			struct {
+				// In degrees; allowed angles: velocity yaw +- Constraints.
+				double Constraints;
+			} VelocityAvg;
 
 			// Type == YAW
 			struct {

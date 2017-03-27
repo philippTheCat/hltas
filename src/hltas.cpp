@@ -517,6 +517,16 @@ namespace HLTAS
 							throw ErrorCode::NO_PM_IN_CONSTRAINTS;
 
 						f.Parameters.Parameters.Velocity.Constraints = boost::lexical_cast<double>(parts[2].c_str() + 2);
+					} else if (type == "velocity_avg") {
+						f.Parameters.Type = ConstraintsType::VELOCITY_AVG;
+
+						if (parts.size() < 3)
+							throw ErrorCode::MISSING_CONSTRAINTS;
+
+						if (!boost::starts_with(parts[2], "+-"))
+							throw ErrorCode::NO_PM_IN_CONSTRAINTS;
+
+						f.Parameters.Parameters.VelocityAvg.Constraints = boost::lexical_cast<double>(parts[2].c_str() + 2);
 					} else if (type == "from") {
 						f.Parameters.Type = ConstraintsType::YAW_RANGE;
 
@@ -861,6 +871,10 @@ namespace HLTAS
 				switch (frame.Parameters.Type) {
 				case ConstraintsType::VELOCITY:
 					file << "velocity +-" << frame.Parameters.Parameters.Velocity.Constraints;
+					break;
+
+				case ConstraintsType::VELOCITY_AVG:
+					file << "velocity_avg +-" << frame.Parameters.Parameters.VelocityAvg.Constraints;
 					break;
 
 				case ConstraintsType::YAW_RANGE:
