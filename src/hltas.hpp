@@ -130,6 +130,12 @@ namespace HLTAS
 				double HighestYaw;
 			} YawRange;
 		} Parameters;
+
+		// Unconstrained by default.
+		AlgorithmParameters() : Type(ConstraintsType::YAW) {
+			Parameters.Yaw.Yaw = 0.0;
+			Parameters.Yaw.Constraints = 180.0;
+		}
 	};
 
 	struct Frame {
