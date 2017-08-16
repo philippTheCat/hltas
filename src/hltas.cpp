@@ -866,7 +866,7 @@ namespace HLTAS
 					throw ErrorCode::FAILWRITE;
 				continue;
 			}
-			if (frame.StrafingAlgorithmPresent) {
+			if (frame.AlgorithmParametersPresent) {
 				file << "target_yaw ";
 				switch (frame.Parameters.Type) {
 				case ConstraintsType::VELOCITY:
